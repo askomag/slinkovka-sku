@@ -4,7 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>SKU Linker Cloud PRO</title>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js">
+window.addEventListener("DOMContentLoaded", () => {
+  if (API_URL && !API_URL.includes("PASTE_")) {
+    loadBaseFromCloud(true);
+  }
+});
+
+</script>
 <style>
 :root{--navy:#12365f;--blue:#2f5597;--green:#70ad47;--red:#c00000;--orange:#f4b183;--bg:#edf3f8;--line:#d7dee8;--yellow:#fff2cc}
 *{box-sizing:border-box}body{margin:0;background:var(--bg);font-family:Arial,sans-serif;color:#172033}
@@ -16,6 +23,9 @@ label{display:block;font-weight:900;margin-bottom:7px}textarea,select,input{widt
 .notice{background:#fff7ed;border:1px solid #fed7aa;border-radius:14px;padding:12px 14px;color:#7c2d12;margin-bottom:14px}.success{background:#ecfdf5;border-color:#bbf7d0;color:#166534}.hint{font-size:12.5px;color:#64748b;line-height:1.35;margin:7px 0 0}
 table{width:100%;border-collapse:collapse;background:white;border-radius:14px;overflow:hidden;box-shadow:0 8px 22px rgba(15,23,42,.07)}th{background:var(--navy);color:white;text-align:left;padding:10px;font-size:13px;position:sticky;top:0}td{padding:8px 10px;border-bottom:1px solid #e5e7eb;font-size:13px}tr:nth-child(even) td{background:#f8fafc}.warn td{background:var(--yellow)!important}.ok{color:#166534;font-weight:900}.bad{color:var(--red);font-weight:900}
 .summary{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin:16px 0}.metric{background:white;border:1px solid var(--line);border-radius:14px;padding:13px;text-align:center}.num{font-size:23px;font-weight:900;color:var(--navy);display:block}.label{font-size:12px;color:#64748b}.bar{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}.pill{display:inline-block;background:#e2e8f0;border-radius:999px;padding:6px 10px;font-weight:800;color:#334155;font-size:12px;margin:3px}
+.rating-high{background:#d9ead3!important;color:#166534!important;font-weight:900}
+.rating-mid{background:#fce4d6!important;color:#9a3412!important;font-weight:900}
+.rating-low{background:#f4cccc!important;color:#990000!important;font-weight:900}
 @media(max-width:950px){.grid,.controls,.summary{grid-template-columns:1fr}}
 </style>
 </head>
@@ -101,9 +111,22 @@ function handleRatingUpload(e,store){const f=e.target.files[0];if(!f)return;read
 function report(html){document.getElementById("uploadReport").innerHTML=`<div class="body">${html}</div>`;}
 function findRowBySku(rows,store,sku){let found=null;rows.forEach(row=>{if(!found&&row[store]&&normalize(row[store])===normalize(sku))found=row;});return found;}
 function findRowAuto(rows,sku){let found=null,foundIn="";rows.forEach(row=>{if(found)return;stores.forEach(s=>{if(!found&&row[s]&&normalize(row[s])===normalize(sku)){found=row;foundIn=s;}})});return {row:found,store:foundIn};}
-function runLink(){const from=document.getElementById("from").value,to=document.getElementById("to").value,input=document.getElementById("linkInput").value.split(/\r?\n/).map(normalize).filter(Boolean),rows=buildIndex(),tbody=document.querySelector("#linkTable tbody");tbody.innerHTML="";let total=input.length,found=0,missing=0,nf=0;input.forEach(sku=>{const row=findRowBySku(rows,from,sku);let tr=document.createElement("tr");if(row){const skuTo=row[to]||"",status=skuTo?"НАЙДЕНО":"НЕТ SKU КУДА";if(skuTo)found++;else{missing++;tr.className="warn";}tr.innerHTML=`<td>${esc(sku)}</td><td>${esc(skuTo)}</td><td>${esc(row.brand||"")}</td><td>${esc(row.model||"")}</td><td>${esc(row.code||"")}</td><td>${esc(ratingOf(from,sku))}</td><td>${esc(ratingOf(to,skuTo))}</td><td class="${skuTo?'ok':'bad'}">${status}</td>`;}else{nf++;tr.className="warn";const auto=findRowAuto(rows,sku),status=auto.row?`НАЙДЕНО НЕ В ${labels[from]}, А В ${labels[auto.store]}`:`НЕ НАЙДЕНО В ${labels[from]}`;tr.innerHTML=`<td>${esc(sku)}</td><td></td><td>${esc(auto.row?.brand||"")}</td><td>${esc(auto.row?.model||"")}</td><td>${esc(auto.row?.code||"")}</td><td></td><td></td><td class="bad">${esc(status)}</td>`;}tbody.appendChild(tr);});document.getElementById("lTotal").textContent=total;document.getElementById("lFound").textContent=found;document.getElementById("lMissing").textContent=missing;document.getElementById("lNotFound").textContent=nf;document.getElementById("lDirection").textContent=`${labels[from]} → ${labels[to]}`;}
+
+function ratingClass(value){
+  if(value === null || value === undefined || value === "") return "";
+  const n = parseFloat(String(value).replace(",", "."));
+  if(isNaN(n)) return "";
+  if(n >= 95) return "rating-high";
+  if(n < 60) return "rating-low";
+  return "rating-mid";
+}
+function ratingCell(value){
+  return `<td class="${ratingClass(value)}">${esc(value)}</td>`;
+}
+
+function runLink(){const from=document.getElementById("from").value,to=document.getElementById("to").value,input=document.getElementById("linkInput").value.split(/\r?\n/).map(normalize).filter(Boolean),rows=buildIndex(),tbody=document.querySelector("#linkTable tbody");tbody.innerHTML="";let total=input.length,found=0,missing=0,nf=0;input.forEach(sku=>{const row=findRowBySku(rows,from,sku);let tr=document.createElement("tr");if(row){const skuTo=row[to]||"",status=skuTo?"НАЙДЕНО":"НЕТ SKU КУДА";if(skuTo)found++;else{missing++;tr.className="warn";}tr.innerHTML=`<td>${esc(sku)}</td><td>${esc(skuTo)}</td><td>${esc(row.brand||"")}</td><td>${esc(row.model||"")}</td><td>${esc(row.code||"")}</td>${ratingCell(ratingOf(from,sku))}${ratingCell(ratingOf(to,skuTo))}<td class="${skuTo?'ok':'bad'}">${status}</td>`;}else{nf++;tr.className="warn";const auto=findRowAuto(rows,sku),status=auto.row?`НАЙДЕНО НЕ В ${labels[from]}, А В ${labels[auto.store]}`:`НЕ НАЙДЕНО В ${labels[from]}`;tr.innerHTML=`<td>${esc(sku)}</td><td></td><td>${esc(auto.row?.brand||"")}</td><td>${esc(auto.row?.model||"")}</td><td>${esc(auto.row?.code||"")}</td><td></td><td></td><td class="bad">${esc(status)}</td>`;}tbody.appendChild(tr);});document.getElementById("lTotal").textContent=total;document.getElementById("lFound").textContent=found;document.getElementById("lMissing").textContent=missing;document.getElementById("lNotFound").textContent=nf;document.getElementById("lDirection").textContent=`${labels[from]} → ${labels[to]}`;}
 function bestRating(row){let bestStore="",bestVal=-1;stores.forEach(s=>{const val=parseFloat(String(ratingOf(s,row[s])).replace(",","."));if(!isNaN(val)&&val>bestVal){bestVal=val;bestStore=s;}});return bestStore?{store:bestStore,val:bestVal}:{store:"",val:""};}
-function runAll(){const from=document.getElementById("allFrom").value,mode=document.getElementById("allMode").value,input=document.getElementById("allInput").value.split(/\r?\n/).map(normalize).filter(Boolean),rows=buildIndex(),tbody=document.querySelector("#allTable tbody");tbody.innerHTML="";input.forEach(sku=>{const found=from==="auto"?findRowAuto(rows,sku):{row:findRowBySku(rows,from,sku),store:from};const tr=document.createElement("tr");if(found.row){const miss=stores.filter(s=>!found.row[s]).map(s=>labels[s]),status=miss.length?`ЕСТЬ ПРОПУСКИ: ${miss.join(", ")}`:"ВСЕ SKU ЕСТЬ";if(mode==="missing"&&status==="ВСЕ SKU ЕСТЬ")return;if(status!=="ВСЕ SKU ЕСТЬ")tr.className="warn";const best=bestRating(found.row),rec=best.store?`Лучше переливать с ${labels[best.store]}`:"Нет рейтингов";tr.innerHTML=`<td>${esc(sku)}</td><td>${esc(labels[found.store]||"AUTO")}</td><td>${esc(found.row.code||"")}</td><td>${esc(found.row.brand||"")}</td><td>${esc(found.row.model||"")}</td><td>${esc(found.row.giga||"")}</td><td>${esc(ratingOf("giga",found.row.giga))}</td><td>${esc(found.row.pt||"")}</td><td>${esc(ratingOf("pt",found.row.pt))}</td><td>${esc(found.row.omega||"")}</td><td>${esc(ratingOf("omega",found.row.omega))}</td><td>${esc(found.row.asko||"")}</td><td>${esc(ratingOf("asko",found.row.asko))}</td><td>${esc(best.val)}</td><td>${esc(rec)}</td><td class="${status==='ВСЕ SKU ЕСТЬ'?'ok':'bad'}">${esc(status)}</td>`;}else{tr.className="warn";tr.innerHTML=`<td>${esc(sku)}</td><td>${from==="auto"?"—":esc(labels[from])}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="bad">НЕ НАЙДЕНО</td>`;}tbody.appendChild(tr);});}
+function runAll(){const from=document.getElementById("allFrom").value,mode=document.getElementById("allMode").value,input=document.getElementById("allInput").value.split(/\r?\n/).map(normalize).filter(Boolean),rows=buildIndex(),tbody=document.querySelector("#allTable tbody");tbody.innerHTML="";input.forEach(sku=>{const found=from==="auto"?findRowAuto(rows,sku):{row:findRowBySku(rows,from,sku),store:from};const tr=document.createElement("tr");if(found.row){const miss=stores.filter(s=>!found.row[s]).map(s=>labels[s]),status=miss.length?`ЕСТЬ ПРОПУСКИ: ${miss.join(", ")}`:"ВСЕ SKU ЕСТЬ";if(mode==="missing"&&status==="ВСЕ SKU ЕСТЬ")return;if(status!=="ВСЕ SKU ЕСТЬ")tr.className="warn";const best=bestRating(found.row),rec=best.store?`Лучше переливать с ${labels[best.store]}`:"Нет рейтингов";tr.innerHTML=`<td>${esc(sku)}</td><td>${esc(labels[found.store]||"AUTO")}</td><td>${esc(found.row.code||"")}</td><td>${esc(found.row.brand||"")}</td><td>${esc(found.row.model||"")}</td><td>${esc(found.row.giga||"")}</td>${ratingCell(ratingOf("giga",found.row.giga))}<td>${esc(found.row.pt||"")}</td>${ratingCell(ratingOf("pt",found.row.pt))}<td>${esc(found.row.omega||"")}</td>${ratingCell(ratingOf("omega",found.row.omega))}<td>${esc(found.row.asko||"")}</td>${ratingCell(ratingOf("asko",found.row.asko))}<td>${esc(best.val)}</td><td>${esc(rec)}</td><td class="${status==='ВСЕ SKU ЕСТЬ'?'ok':'bad'}">${esc(status)}</td>`;}else{tr.className="warn";tr.innerHTML=`<td>${esc(sku)}</td><td>${from==="auto"?"—":esc(labels[from])}</td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td></td><td class="bad">НЕ НАЙДЕНО</td>`;}tbody.appendChild(tr);});}
 function clearLink(){document.getElementById("linkInput").value="";document.querySelector("#linkTable tbody").innerHTML="";}
 function clearAllInput(){document.getElementById("allInput").value="";document.querySelector("#allTable tbody").innerHTML="";}
 function tableToRows(id){return Array.from(document.querySelectorAll(`#${id} tr`)).map(tr=>Array.from(tr.children).map(td=>td.textContent.trim()));}
@@ -114,10 +137,17 @@ function getStats(){const st={};stores.forEach(s=>{st[s]=parseProducts(products[
 async function apiPost(payload){if(!API_URL||API_URL.includes("PASTE_"))throw new Error("Не вставлен API_URL Apps Script");const res=await fetch(API_URL,{method:"POST",body:JSON.stringify(payload)});return await res.json();}
 async function apiGet(action){if(!API_URL||API_URL.includes("PASTE_"))throw new Error("Не вставлен API_URL Apps Script");const res=await fetch(API_URL+"?action="+action);return await res.json();}
 async function saveBaseToCloud(){try{await apiPost({action:"saveBase",base:getBaseObject()});report("База сохранена в облако.");}catch(e){alert(e.message);}}
-async function loadBaseFromCloud(){try{const r=await apiGet("loadBase");if(r.base){products=r.base.products||products;ratings=r.base.ratings||ratings;alert("База загружена из облака.");}else alert("В облаке пока нет базы.");}catch(e){alert(e.message);}}
+async function loadBaseFromCloud(silent=false){try{const r=await apiGet("loadBase");if(r.base){products=r.base.products||products;ratings=r.base.ratings||ratings;if(!silent)alert("База загружена из облака.");}else if(!silent)alert("В облаке пока нет базы.");}catch(e){if(!silent)alert(e.message);}}
 async function saveSnapshot(){try{await apiPost({action:"saveSnapshot",snapshot:{date:new Date().toISOString(),stats:getStats()}});report("Период сохранён для аналитики.");}catch(e){alert(e.message);}}
 async function loadAnalytics(){try{const r=await apiGet("analytics");const tbody=document.querySelector("#analyticsTable tbody");tbody.innerHTML="";(r.snapshots||[]).forEach(s=>{const st=s.stats||{};const tr=document.createElement("tr");tr.innerHTML=`<td>${esc(s.date||"")}</td><td>${esc(st.totalCodes||0)}</td><td>${esc(st.giga||0)}</td><td>${esc(st.pt||0)}</td><td>${esc(st.omega||0)}</td><td>${esc(st.asko||0)}</td><td>${esc(st.rating_giga||0)}</td><td>${esc(st.rating_pt||0)}</td><td>${esc(st.rating_omega||0)}</td><td>${esc(st.rating_asko||0)}</td>`;tbody.appendChild(tr);});}catch(e){alert(e.message);}}
 function validateData(){let html="";const st=getStats();stores.forEach(s=>html+=`<span class="pill">${labels[s]}: ${st[s]} товаров, ${st["rating_"+s]} рейтингов</span>`);html+=`<br><span class="pill">Уникальных кодов: ${st.totalCodes}</span>`;report(html);}
 function clearLocal(){products={giga:"",pt:"",omega:"",asko:""};ratings={giga:"",pt:"",omega:"",asko:""};document.querySelectorAll("tbody").forEach(t=>t.innerHTML="");report("Локальные данные очищены.");}
+
+window.addEventListener("DOMContentLoaded", () => {
+  if (API_URL && !API_URL.includes("PASTE_")) {
+    loadBaseFromCloud(true);
+  }
+});
+
 </script>
 </body></html>
